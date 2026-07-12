@@ -1,0 +1,51 @@
+diff --git a/include/tesla.hpp b/include/tesla.hpp
+index c0e9830..77a77e8 100644
+--- a/include/tesla.hpp
++++ b/include/tesla.hpp
+@@ -2893,6 +2893,13 @@ namespace tsl {
+          */
+         virtual void exitServices() {}
+ 
++        /**
++         * @brief Called before the overlay acquires foreground input
++         * @return Whether the overlay may be shown
++         *
++         */
++        virtual bool onBeforeForegroundAcquire() { return true; }
++
+         /**
+          * @brief Called before overlay changes from invisible to visible state
+          *
+@@ -2905,6 +2912,12 @@ namespace tsl {
+          */
+         virtual void onHide() {}
+ 
++        /**
++         * @brief Called after the overlay has released foreground input
++         *
++         */
++        virtual void onForegroundReleased() {}
++
+         /**
+          * @brief Loads the default Gui
+          * @note This function should return the initial Gui to load using the \ref Gui::initially<T>(Args.. args) function
+@@ -3550,6 +3563,10 @@ namespace tsl {
+ 
+             eventWait(&shData.comboEvent, UINT64_MAX);
+             eventClear(&shData.comboEvent);
++
++            if (!overlay->onBeforeForegroundAcquire())
++                continue;
++
+             shData.overlayOpen = true;
+ 
+ 
+@@ -3582,6 +3599,8 @@ namespace tsl {
+ 
+             hlp::requestForeground(false);
+ 
++            overlay->onForegroundReleased();
++
+             shData.overlayOpen = false;
+             eventClear(&shData.comboEvent);
+         }

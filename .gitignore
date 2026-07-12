@@ -1,0 +1,19 @@
+# Build artifacts
+build/
+build-host/
+*.elf
+*.nso
+*.nsp
+*.npdm
+*.nro
+*.nacp
+*.ovl
+__pycache__/
+*.py[cod]
+exefs/
+libs/libtesla/
+dist/
+
+# Editor
+.vscode/
+*.swp
