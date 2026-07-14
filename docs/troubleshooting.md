@@ -24,10 +24,27 @@ Report the last `stage` and full Result value.
 ## Dots Do Not Move
 
 1. Set Sensitivity to 70-100%.
-2. Move the active sensor source: the Switch in handheld mode, or the active controller in docked mode.
+2. Move the Switch itself. `source=Console` is the preferred source in handheld
+   mode; controller sources are fallbacks.
 3. Camera movement inside a game has no effect.
 4. Read `/config/swots/sensor.log`.
-5. If `sampling_number` stops increasing, report the controller, connection, and system versions.
+5. The log keeps up to 32 KiB of records, writes a normal heartbeat every 30
+   seconds, and is always limited to one record per second. Compare consecutive
+   `sampling` values.
+6. `NoSamples` means no fresh report for at least 250 ms; `WaitingRetry`
+   means the source was released after one second without reports.
+7. `ZeroData` means sampling numbers advanced but the three-axis acceleration
+   did not contain physical gravity, so SWOTS rejected that source.
+8. If `sampling` stops increasing, report the controller, connection, system
+   versions, `last_attempt`, `last_start_result`, `console_init_result`, and
+   `console_start_result`. A nonzero console result means SWOTS automatically
+   fell back to ordinary controller HID. A console stream that becomes stale
+   is retried only after a 30-second cooldown.
+9. Games which activate a real controller six-axis stream should switch from
+   `Console` to `Handheld`, `FullKey`, or `JoyDual` after about 600 ms and show
+   one upper-left `MOTION: CONTROLLER` toast. The exact inactive vector
+   `(0,0,-1)` with a zero gyroscope is treated as a placeholder and cannot
+   trigger a promotion.
 
 ## Tesla or Buttons Stop Working
 

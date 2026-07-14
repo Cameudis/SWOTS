@@ -6,6 +6,8 @@
 #include "motion.hpp"
 #include "control.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 extern "C" u64 __nx_vi_layer_id;
@@ -130,13 +132,47 @@ fail_vi:
     return rc;
 }
 
-void render(Context *context, Motion &motion, const Config &config, float dt) {
-    if (!context || !context->initialized) return;
+FrameState update(Context *context, Motion &motion, const Config &config,
+                  float dt) {
+    FrameState frame{};
+    if (!context || !context->initialized) return frame;
     motion.update(motion.sample(), config, dt);
 
+    const Motion::Source currentSource = motion.source();
+    if (context->observedSource == Motion::Source::None) {
+        context->observedSource = currentSource;
+    } else if (currentSource != Motion::Source::None &&
+               currentSource != context->observedSource) {
+        // One in-layer toast instance only: a later stable switch replaces the
+        // old message instead of allocating or queueing another window.
+        context->observedSource = currentSource;
+        context->toastSource = currentSource;
+        context->toastRemaining = 2.5f;
+    }
+
+    constexpr float kVisualChangeEpsilon = 0.01f;
+    frame.visualChanged = !context->hasObservedVisual ||
+        std::abs(motion.offsetX() - context->observedOffsetX) >=
+            kVisualChangeEpsilon ||
+        std::abs(motion.offsetY() - context->observedOffsetY) >=
+            kVisualChangeEpsilon ||
+        std::abs(motion.roll() - context->observedRoll) >=
+            kVisualChangeEpsilon;
+    context->observedOffsetX = motion.offsetX();
+    context->observedOffsetY = motion.offsetY();
+    context->observedRoll = motion.roll();
+    context->hasObservedVisual = true;
+    context->toastRemaining = std::max(0.0f, context->toastRemaining - dt);
+    frame.toastActive = context->toastRemaining > 0.0f;
+    return frame;
+}
+
+void present(Context *context, const Motion &motion, const Config &config) {
+    if (!context || !context->initialized) return;
     u32 stride = 0;
     auto *pixels = static_cast<u32 *>(framebufferBegin(&context->framebuffer, &stride));
-    draw::frame(pixels, stride, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT, motion, config);
+    draw::frame(pixels, stride, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT, motion,
+                config, context->toastSource, context->toastRemaining);
     framebufferEnd(&context->framebuffer);
 }
 

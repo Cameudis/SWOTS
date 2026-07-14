@@ -12,6 +12,40 @@ inline constexpr bool isFreshSamplingNumber(unsigned long long previous,
     return current != previous;
 }
 
+inline bool hasUsableGravity(float accelX, float accelY, float accelZ) noexcept {
+    if (!std::isfinite(accelX) || !std::isfinite(accelY) ||
+        !std::isfinite(accelZ)) return false;
+    // A live six-axis report includes gravity even while the controller is at
+    // rest. A tiny norm is the zero-filled stream returned by some inactive
+    // controller/style combinations, not a stationary physical sensor.
+    constexpr float minimumGravity = 0.10f;
+    return accelX * accelX + accelY * accelY + accelZ * accelZ >=
+           minimumGravity * minimumGravity;
+}
+
+inline constexpr bool shouldHoldLastSample(
+    unsigned long long freshAgeNs) noexcept {
+    // ConsoleSevenSixAxisSensor reports at roughly 10 Hz. Treat its most
+    // recent acceleration/angular velocity as a zero-order-held signal so the
+    // 60 Hz motion model keeps integrating and damping between reports. Stop
+    // after 150 ms so a stalled stream cannot keep driving motion indefinitely.
+    return freshAgeNs < 150'000'000ULL;
+}
+
+inline bool isInactiveControllerPlaceholder(float accelX, float accelY,
+                                             float accelZ, float gyroX,
+                                             float gyroY,
+                                             float gyroZ) noexcept {
+    if (!std::isfinite(accelX) || !std::isfinite(accelY) ||
+        !std::isfinite(accelZ) || !std::isfinite(gyroX) ||
+        !std::isfinite(gyroY) || !std::isfinite(gyroZ)) return false;
+    constexpr float epsilon = 0.00001f;
+    return std::abs(accelX) <= epsilon && std::abs(accelY) <= epsilon &&
+           std::abs(accelZ + 1.0f) <= epsilon &&
+           std::abs(gyroX) <= epsilon && std::abs(gyroY) <= epsilon &&
+           std::abs(gyroZ) <= epsilon;
+}
+
 struct Input {
     float accelX = 0.0f;
     float accelY = 0.0f;

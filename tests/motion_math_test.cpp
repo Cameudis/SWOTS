@@ -169,6 +169,20 @@ int main() {
     CHECK(swots::motion_math::isFreshSamplingNumber(42, 43));
     CHECK(swots::motion_math::isFreshSamplingNumber(
         std::numeric_limits<unsigned long long>::max(), 0));
+    CHECK(!swots::motion_math::hasUsableGravity(0.0f, 0.0f, 0.0f));
+    CHECK(!swots::motion_math::hasUsableGravity(0.01f, -0.01f, 0.01f));
+    CHECK(swots::motion_math::hasUsableGravity(0.0f, 0.0f, -1.0f));
+    CHECK(!swots::motion_math::hasUsableGravity(
+        std::numeric_limits<float>::quiet_NaN(), 0.0f, -1.0f));
+    CHECK(swots::motion_math::shouldHoldLastSample(0));
+    CHECK(swots::motion_math::shouldHoldLastSample(149'999'999ULL));
+    CHECK(!swots::motion_math::shouldHoldLastSample(150'000'000ULL));
+    CHECK(swots::motion_math::isInactiveControllerPlaceholder(
+        0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f));
+    CHECK(!swots::motion_math::isInactiveControllerPlaceholder(
+        0.01f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f));
+    CHECK(!swots::motion_math::isInactiveControllerPlaceholder(
+        0.0f, 0.0f, -1.0f, 0.0f, 0.001f, 0.0f));
     validMotionProducesDisplacement();
     gyroRespondsOnFirstMovingFrame();
     positiveHorizontalAccelerationMovesPositive();

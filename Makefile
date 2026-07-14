@@ -34,7 +34,9 @@ HOST_BUILD   := build-host
 HOST_TESTS   := $(HOST_BUILD)/tesla_coexistence_test \
                 $(HOST_BUILD)/settings_format_test \
                 $(HOST_BUILD)/pixel_math_test \
-                $(HOST_BUILD)/motion_math_test
+                $(HOST_BUILD)/motion_math_test \
+                $(HOST_BUILD)/source_selection_test \
+                $(HOST_BUILD)/power_policy_test
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -169,6 +171,16 @@ $(HOST_BUILD)/pixel_math_test: tests/pixel_math_test.cpp include/pixel_math.hpp
 		-I$(CURDIR)/include $< -o $@
 
 $(HOST_BUILD)/motion_math_test: tests/motion_math_test.cpp include/motion_math.hpp
+	@mkdir -p $(HOST_BUILD)
+	@$(HOST_CXX) -std=c++20 -O2 -Wall -Wextra -Werror -pedantic \
+		-I$(CURDIR)/include $< -o $@
+
+$(HOST_BUILD)/source_selection_test: tests/source_selection_test.cpp include/source_selection.hpp
+	@mkdir -p $(HOST_BUILD)
+	@$(HOST_CXX) -std=c++20 -O2 -Wall -Wextra -Werror -pedantic \
+		-I$(CURDIR)/include $< -o $@
+
+$(HOST_BUILD)/power_policy_test: tests/power_policy_test.cpp include/power_policy.hpp
 	@mkdir -p $(HOST_BUILD)
 	@$(HOST_CXX) -std=c++20 -O2 -Wall -Wextra -Werror -pedantic \
 		-I$(CURDIR)/include $< -o $@

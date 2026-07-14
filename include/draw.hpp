@@ -9,6 +9,7 @@
 namespace draw {
 
 void frame(u32 *pixels, u32 stride, u32 width, u32 height,
-           const Motion &motion, const Config &config);
+           const Motion &motion, const Config &config,
+           Motion::Source toastSource, float toastSeconds);
 
 } // namespace draw

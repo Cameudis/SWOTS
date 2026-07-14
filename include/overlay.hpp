@@ -13,11 +13,25 @@ struct Context {
     ViLayer layer{};
     NWindow window{};
     Framebuffer framebuffer{};
+    Motion::Source observedSource = Motion::Source::None;
+    Motion::Source toastSource = Motion::Source::None;
+    float toastRemaining = 0.0f;
+    float observedOffsetX = 0.0f;
+    float observedOffsetY = 0.0f;
+    float observedRoll = 0.0f;
+    bool hasObservedVisual = false;
     bool initialized = false;
 };
 
+struct FrameState {
+    bool visualChanged = false;
+    bool toastActive = false;
+};
+
 Result init(Context *context);
-void render(Context *context, Motion &motion, const Config &config, float dt);
+FrameState update(Context *context, Motion &motion, const Config &config,
+                  float dt);
+void present(Context *context, const Motion &motion, const Config &config);
 void fini(Context *context);
 
 } // namespace overlay

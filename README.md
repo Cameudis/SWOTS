@@ -61,7 +61,7 @@ Build and verify the release:
 ```sh
 make dist -j2
 cd dist
-sha256sum -c SWOTS-v0.1.0-alpha.1.zip.sha256
+sha256sum -c SWOTS-v0.1.0-alpha.2.zip.sha256
 ```
 
 NPDM compatibility depends on the tested `ffff0400` capability bytes. Changes to the toolchain, permissions, VI, HID, or PM require hardware testing. Title ID: `4200000000007E09`.

@@ -8,12 +8,11 @@
 
 #include <switch.h>
 
-#include <cmath>
-
 #include "config.hpp"
 #include "control.hpp"
 #include "motion.hpp"
 #include "overlay.hpp"
+#include "power_policy.hpp"
 #include "tesla_coexistence.hpp"
 
 extern "C" {
@@ -80,18 +79,23 @@ int main(int, char **) {
     while (R_FAILED(control::open())) svcSleepThread(1'000'000'000ULL);
 
     Config config{};
-    Motion motion;
     overlay::Context layer{};
     PadState pad{};
     padInitializeAny(&pad);
+    padUpdate(&pad);
+    Motion motion;
     const u64 teslaCombo = control::readTeslaCombo();
     tesla_coexistence::StateMachine teslaState;
+    swots::power_policy::State powerState;
     u64 nextSettingsReload = 0;
+    u64 nextEnabledPoll = 0;
+    u64 nextLifecyclePoll = 0;
     Motion::Source lastMotionSource = Motion::Source::None;
     Motion::Status lastMotionStatus = Motion::Status::WaitingRetry;
     bool motionStatusWritten = false;
-    bool motionObserved = false;
-    u32 motionStatusWrites = 0;
+    u64 nextMotionHeartbeat = 0;
+    u64 nextMotionLogAllowed = 0;
+    const u64 processStartTick = armGetSystemTick();
     u64 lastTick = armGetSystemTick();
 
     while (true) {
@@ -99,18 +103,33 @@ int main(int, char **) {
         const u64 buttons = padGetButtons(&pad);
         const bool comboHeld = (buttons & teslaCombo) == teslaCombo;
         const u64 loopTick = armGetSystemTick();
-        if (loopTick >= nextSettingsReload) {
+        const bool wasEnabled = config.enabled;
+        if (loopTick >= nextEnabledPoll) {
+            config.enabled = control::isEnabled();
+            nextEnabledPoll = loopTick + armNsToTicks(250'000'000ULL);
+        }
+        if (config.enabled && !wasEnabled) {
+            nextSettingsReload = 0;
+            nextLifecyclePoll = 0;
+        }
+        if (config.enabled && loopTick >= nextSettingsReload) {
             control::loadSettings(&config);
             nextSettingsReload = loopTick + armNsToTicks(500'000'000ULL);
         }
-        config.enabled = control::isEnabled();
         const u64 nowNs = armTicksToNs(loopTick);
         tesla_coexistence::LifecycleSignal lifecycle{};
-        control::readTeslaLifecycle(&lifecycle);
+        if (config.enabled && loopTick >= nextLifecyclePoll) {
+            control::readTeslaLifecycle(&lifecycle);
+            nextLifecyclePoll = loopTick + armNsToTicks(50'000'000ULL);
+        }
         const auto coexistence =
             teslaState.update(config.enabled, comboHeld, lifecycle, nowNs);
 
-        if (coexistence.destroyLayer && layer.initialized) overlay::fini(&layer);
+        if (coexistence.destroyLayer && layer.initialized) {
+            motion.suspend();
+            overlay::fini(&layer);
+            powerState = {};
+        }
         if (coexistence.acknowledgeLifecycle) {
             control::writeTeslaLifecycleAck(coexistence.lifecycleSession,
                                             coexistence.lifecycleGeneration);
@@ -122,13 +141,15 @@ int main(int, char **) {
         }
 
         if (!config.enabled) {
-            svcSleepThread(100'000'000ULL);
+            motion.suspend();
+            svcSleepThread(250'000'000ULL);
             lastTick = armGetSystemTick();
             continue;
         }
 
         if (!coexistence.allowLayer) {
-            svcSleepThread(20'000'000ULL);
+            motion.suspend();
+            svcSleepThread(50'000'000ULL);
             lastTick = armGetSystemTick();
             continue;
         }
@@ -137,11 +158,14 @@ int main(int, char **) {
             Result rc = overlay::init(&layer);
             if (R_FAILED(rc)) {
                 // Avoid a crash loop when a firmware rejects VI manager access.
+                motion.suspend();
                 svcSleepThread(1'000'000'000ULL);
                 continue;
             }
+            powerState = {};
             lastTick = armGetSystemTick();
         }
+        motion.resume();
 
         const u64 now = armGetSystemTick();
         float dt = static_cast<float>(armTicksToNs(now - lastTick)) / 1'000'000'000.0f;
@@ -149,30 +173,45 @@ int main(int, char **) {
         if (dt < 0.001f) dt = 0.001f;
         if (dt > 0.100f) dt = 0.100f;
 
-        overlay::render(&layer, motion, config, dt);
+        const overlay::FrameState frame =
+            overlay::update(&layer, motion, config, dt);
+        const auto power = swots::power_policy::update(
+            powerState, armTicksToNs(armGetSystemTick()),
+            frame.visualChanged, frame.toastActive);
+        if (power.present) overlay::present(&layer, motion, config);
         const bool motionStatusChanged = !motionStatusWritten ||
                                          motion.source() != lastMotionSource ||
                                          motion.status() != lastMotionStatus;
-        const bool movedNow = std::abs(motion.offsetX()) >= 1.0f ||
-                              std::abs(motion.offsetY()) >= 1.0f;
-        if (motion.source() != lastMotionSource) motionObserved = false;
-        const bool shouldWriteMotion = (!motionObserved && movedNow) ||
-                                       (motionStatusChanged && motionStatusWrites < 12);
+        const bool heartbeatDue = now >= nextMotionHeartbeat;
+        const bool shouldWriteMotion = now >= nextMotionLogAllowed &&
+                                       (motionStatusChanged || heartbeatDue);
         if (shouldWriteMotion) {
             const MotionSample &sample = motion.lastSample();
             control::writeSensorStatus(
                 motion.sourceName(), motion.statusName(), motion.samplingNumber(),
                 static_cast<s32>(sample.accelX * 1000.0f),
                 static_cast<s32>(sample.accelY * 1000.0f),
+                static_cast<s32>(sample.accelZ * 1000.0f),
                 static_cast<s32>(sample.gyroX * 1000.0f),
+                static_cast<s32>(sample.gyroY * 1000.0f),
                 static_cast<s32>(sample.gyroZ * 1000.0f),
                 static_cast<s32>(motion.offsetX() * 100.0f),
-                static_cast<s32>(motion.offsetY() * 100.0f));
+                static_cast<s32>(motion.offsetY() * 100.0f),
+                armTicksToNs(now - processStartTick) / 1'000'000ULL,
+                motion.freshAgeMs(now), motion.signalAgeMs(now),
+                motion.retryCount(),
+                motion.startFailureCount(), motion.lastAttemptName(),
+                motion.lastStartResult(), motion.no1StyleSet(),
+                motion.handheldStyleSet(), sample.attributes,
+                motion.consoleInitResult(),
+                motion.consoleStartResult());
             lastMotionSource = motion.source();
             lastMotionStatus = motion.status();
             motionStatusWritten = true;
-            motionObserved = motionObserved || movedNow;
-            ++motionStatusWrites;
+            // Bound both normal SD traffic and pathological status flapping.
+            nextMotionHeartbeat = now + armNsToTicks(30'000'000'000ULL);
+            nextMotionLogAllowed = now + armNsToTicks(1'000'000'000ULL);
         }
+        if (power.sleepNs != 0) svcSleepThread(power.sleepNs);
     }
 }
