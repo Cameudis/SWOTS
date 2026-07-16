@@ -4,6 +4,20 @@
 
 - No changes.
 
+## 0.1.0-alpha.3 — 2026-07-16
+
+- Replaced SD-card control-file polling with a private, versioned IPC service
+  and event-driven lifecycle acknowledgements.
+- Stopped the renderer completely when cues are Off and removed periodic
+  control wakeups while it is suspended for Tesla.
+- Added explicit `A`-to-save settings transactions while cues are On. Other
+  exits cancel the draft, and saved values apply when Tesla closes.
+- Added crash-safe, checksummed settings with automatic migration from the
+  previous format and paired overlay/renderer version checks.
+- Simplified user-facing status messages and strengthened startup, disconnect,
+  timeout, metadata, and release verification paths.
+- Hardware-tested startup, visual cues, runtime settings, stop, and restart.
+
 ## 0.1.0-alpha.2 — 2026-07-14
 
 - Added a lower-level console motion source that remains available when games

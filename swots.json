@@ -15,6 +15,7 @@
 		"permissions":	"0xffffffffffffffff"
 	},
 	"service_access":	["*"],
+	"service_host":	["swots:u"],
 	"kernel_capabilities":	[{
 			"type":	"kernel_flags",
 			"value":	{

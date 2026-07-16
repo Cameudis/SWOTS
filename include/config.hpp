@@ -14,7 +14,6 @@ struct Color {
 };
 
 struct Config : swots::settings::Values {
-    bool enabled = false;
     u8 dotSpacing = 52;
     Color dotColor = {0xF4, 0xF7, 0xFF, 0xFF};
 };

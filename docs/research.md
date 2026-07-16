@@ -59,12 +59,13 @@ Public KineStop behavior was used only to compare motion direction and sensitivi
   Switch notification but never opens a system applet and has no notification
   queue, allocation, or extra thread.
 - SWOTS starts the active sensor only after its VI layer is available and stops
-  it while disabled or suspended for Tesla. Visual motion and source notices
+  it while suspended for Tesla. Visual motion and source notices
   render at full rate; a stable frame steps down to 30 Hz after one second and
-  10 Hz after five seconds. Lifecycle checks remain responsive within 50 ms.
-- While disabled, only the enable flag is checked every 250 ms. Settings and
-  Tesla lifecycle files are not polled until SWOTS is enabled, avoiding
-  unnecessary SD-card wakeups.
+  10 Hz after five seconds. Running lifecycle changes wake the render loop
+  through an event instead of an SD-card timer.
+- Enable, configuration, foreground coordination, and acknowledgements use the
+  private `swots:u` CMIF service. The renderer exits when cues are Off and has
+  no periodic control wakeup while suspended.
 - Bluetooth-driver reports do not cover controllers attached through the
   rails, while an HID MITM or raw XCD/controller-protocol implementation would
   be substantially more invasive and controller-specific.

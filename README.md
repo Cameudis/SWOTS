@@ -30,11 +30,15 @@ The package must not contain `boot2.flag`; Tesla starts the renderer when needed
 
 ## Use
 
-- Configure opacity, dot radius, sensitivity, and smoothing in Tesla → SWOTS.
+- Configure opacity, dot radius, sensitivity, and smoothing in Tesla → SWOTS,
+  then press `A` to save the complete configuration. Leaving the page any
+  other way cancels the draft.
 - Press `B` on the SWOTS main screen to close the overlay and resume cues.
 - Select `Stop and return to Tesla` to stop cues and return to Tesla.
 - The Tesla shortcut also opens and closes the overlay.
 - `Off` removes the cues and stops the renderer.
+- Settings can be saved while cues are On; the new values take effect when
+  Tesla closes.
 - Cues respond only to physical console/controller motion, not the in-game camera.
 
 Settings and logs: `/config/swots/settings.cfg`, `/config/swots/renderer.log`, and `/config/swots/sensor.log`.
@@ -61,14 +65,16 @@ Build and verify the release:
 ```sh
 make dist -j2
 cd dist
-sha256sum -c SWOTS-v0.1.0-alpha.2.zip.sha256
+sha256sum -c SWOTS-v0.1.0-alpha.3.zip.sha256
 ```
 
 NPDM compatibility depends on the tested `ffff0400` capability bytes. Changes to the toolchain, permissions, VI, HID, or PM require hardware testing. Title ID: `4200000000007E09`.
 
 ## Upgrade or uninstall
 
-Turn cues `Off` before replacing files. Restart after upgrading; settings remain in `/config/swots/settings.cfg`.
+Turn cues `Off` before replacing files. The overlay and renderer must come from
+the same release. Restart after upgrading; settings remain in
+`/config/swots/settings.cfg`.
 
 To uninstall, turn cues `Off`, restart, then delete:
 

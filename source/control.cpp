@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <cstring>
 
 namespace control {
 
@@ -14,7 +13,7 @@ static bool g_open = false;
 
 Result open() {
     if (g_open) return 0;
-    Result rc = fsOpenSdCardFileSystem(&g_sd);
+    const Result rc = fsOpenSdCardFileSystem(&g_sd);
     if (R_SUCCEEDED(rc)) g_open = true;
     return rc;
 }
@@ -25,166 +24,15 @@ void close() {
     g_open = false;
 }
 
-bool isEnabled() {
-    if (!g_open) return false;
-    FsFile file{};
-    Result rc = fsFsOpenFile(&g_sd, SWOTS_ENABLED_FILE, FsOpenMode_Read, &file);
-    if (R_FAILED(rc)) return false;
-    fsFileClose(&file);
-    return true;
-}
-
-bool readTeslaLifecycle(tesla_coexistence::LifecycleSignal *signal) {
-    if (!g_open || signal == nullptr) return false;
-    *signal = {};
-
-    FsFile file{};
-    if (R_FAILED(fsFsOpenFile(&g_sd, SWOTS_TESLA_LIFECYCLE_FILE,
-                              FsOpenMode_Read, &file))) {
-        return false;
-    }
-
-    tesla_lifecycle::Record record{};
-    u64 bytesRead = 0;
-    const Result rc = fsFileRead(&file, 0, &record, sizeof(record),
-                                 FsReadOption_None, &bytesRead);
-    fsFileClose(&file);
-    if (R_FAILED(rc) || bytesRead != sizeof(record) ||
-        !tesla_lifecycle::valid(record)) {
-        return false;
-    }
-
-    signal->present = true;
-    signal->session = record.session;
-    signal->generation = record.generation;
-    signal->state = record.state;
-    return true;
-}
-
-Result writeTeslaLifecycleAck(u64 session, u64 generation) {
-    if (!g_open || session == 0 || generation == 0) {
-        return MAKERESULT(Module_Libnx, LibnxError_BadInput);
-    }
-
-    tesla_lifecycle::Ack ack{};
-    ack.session = session;
-    ack.generation = generation;
-
-    fsFsDeleteFile(&g_sd, SWOTS_TESLA_LIFECYCLE_ACK_TEMP_FILE);
-    Result rc = fsFsCreateFile(&g_sd, SWOTS_TESLA_LIFECYCLE_ACK_TEMP_FILE,
-                               sizeof(ack), 0);
-    if (R_FAILED(rc)) return rc;
-
-    FsFile file{};
-    rc = fsFsOpenFile(&g_sd, SWOTS_TESLA_LIFECYCLE_ACK_TEMP_FILE,
-                      FsOpenMode_Write, &file);
-    if (R_SUCCEEDED(rc)) {
-        rc = fsFileWrite(&file, 0, &ack, sizeof(ack), FsWriteOption_Flush);
-        fsFileClose(&file);
-    }
-    if (R_FAILED(rc)) return rc;
-    rc = fsFsCommit(&g_sd);
-    if (R_FAILED(rc)) return rc;
-
-    fsFsDeleteFile(&g_sd, SWOTS_TESLA_LIFECYCLE_ACK_FILE);
-    rc = fsFsRenameFile(&g_sd, SWOTS_TESLA_LIFECYCLE_ACK_TEMP_FILE,
-                        SWOTS_TESLA_LIFECYCLE_ACK_FILE);
-    if (R_FAILED(rc)) return rc;
-    return fsFsCommit(&g_sd);
-}
-
-namespace {
-
-bool loadSettingsFile(const char *path, const swots::settings::Values &base,
-                      swots::settings::Values *values) {
-    FsFile file{};
-    if (R_FAILED(fsFsOpenFile(&g_sd, path, FsOpenMode_Read, &file))) return false;
-
-    s64 fileSize = 0;
-    Result rc = fsFileGetSize(&file, &fileSize);
-    if (R_FAILED(rc) || fileSize <= 0 ||
-        fileSize > static_cast<s64>(swots::settings::kMaxTextSize)) {
-        fsFileClose(&file);
-        return false;
-    }
-
-    char text[swots::settings::kMaxTextSize]{};
-    u64 bytesRead = 0;
-    rc = fsFileRead(&file, 0, text, static_cast<u64>(fileSize),
-                    FsReadOption_None, &bytesRead);
-    fsFileClose(&file);
-    if (R_FAILED(rc) || bytesRead != static_cast<u64>(fileSize)) return false;
-
-    return swots::settings::parse(text, static_cast<std::size_t>(fileSize),
-                                     base, values);
-}
-
-} // namespace
-
-bool loadSettings(Config *config) {
-    if (!g_open || config == nullptr) return false;
-
-    const swots::settings::Values base = *config;
-    swots::settings::Values loaded{};
-    constexpr const char *candidates[] = {
-        SWOTS_SETTINGS_FILE,
-        SWOTS_SETTINGS_TEMP_FILE,
-        SWOTS_SETTINGS_BACKUP_FILE,
-    };
-    for (const char *path : candidates) {
-        if (!loadSettingsFile(path, base, &loaded)) continue;
-        config->opacity = loaded.opacity;
-        config->dotRadius = loaded.dotRadius;
-        config->sensitivity = loaded.sensitivity;
-        config->smoothing = loaded.smoothing;
-        return true;
-    }
-    return false;
-}
-
-Result setEnabled(bool enabled) {
-    if (!g_open) {
-        Result rc = open();
-        if (R_FAILED(rc)) return rc;
-    }
-
-    // Already-exists / not-found are harmless for an idempotent toggle.
-    fsFsCreateDirectory(&g_sd, "/config");
-    fsFsCreateDirectory(&g_sd, SWOTS_CONFIG_DIR);
-
-    if (enabled) {
-        FsFile file{};
-        Result rc = fsFsOpenFile(&g_sd, SWOTS_ENABLED_FILE, FsOpenMode_Read, &file);
-        if (R_SUCCEEDED(rc)) {
-            fsFileClose(&file);
-            return 0;
-        }
-        rc = fsFsCreateFile(&g_sd, SWOTS_ENABLED_FILE, 0, 0);
-        if (R_FAILED(rc)) return rc;
-    } else {
-        FsFile file{};
-        Result rc = fsFsOpenFile(&g_sd, SWOTS_ENABLED_FILE, FsOpenMode_Read, &file);
-        if (R_FAILED(rc)) return 0;
-        fsFileClose(&file);
-        rc = fsFsDeleteFile(&g_sd, SWOTS_ENABLED_FILE);
-        if (R_FAILED(rc)) return rc;
-    }
-
-    return fsFsCommit(&g_sd);
-}
-
 namespace {
 
 void writeSmallFile(const char *path, const char *text, int length) {
     if (!g_open || !path || !text || length <= 0) return;
-
     fsFsCreateDirectory(&g_sd, "/config");
     fsFsCreateDirectory(&g_sd, SWOTS_CONFIG_DIR);
     fsFsDeleteFile(&g_sd, path);
-
     const u64 size = static_cast<u64>(length);
     if (R_FAILED(fsFsCreateFile(&g_sd, path, size, 0))) return;
-
     FsFile file{};
     if (R_FAILED(fsFsOpenFile(&g_sd, path, FsOpenMode_Write, &file))) return;
     fsFileWrite(&file, 0, text, size, FsWriteOption_Flush);
@@ -196,65 +44,54 @@ void writeSmallFile(const char *path, const char *text, int length) {
 
 void writeStatus(const char *stage, Result result) {
     if (!g_open || !stage) return;
-
     char text[160]{};
     const int length = std::snprintf(text, sizeof(text),
-                                     "stage=%s\nresult=0x%08X\n",
-                                     stage, static_cast<unsigned>(result));
-    if (length <= 0) return;
-    writeSmallFile(SWOTS_LOG_FILE, text,
-                   std::min<int>(length, sizeof(text) - 1));
+                                     "stage=%s\nresult=0x%08X\n", stage,
+                                     static_cast<unsigned>(result));
+    if (length > 0)
+        writeSmallFile(SWOTS_LOG_FILE, text,
+                       std::min<int>(length, sizeof(text) - 1));
 }
 
-void writeSensorStatus(const char *source, const char *status, u64 samplingNumber,
-                       s32 accelXMilli, s32 accelYMilli, s32 accelZMilli,
-                       s32 gyroXMilli, s32 gyroYMilli, s32 gyroZMilli,
-                       s32 offsetXCenti, s32 offsetYCenti,
+void writeSensorStatus(const char *source, const char *status,
+                       u64 samplingNumber, s32 accelXMilli, s32 accelYMilli,
+                       s32 accelZMilli, s32 gyroXMilli, s32 gyroYMilli,
+                       s32 gyroZMilli, s32 offsetXCenti, s32 offsetYCenti,
                        u64 uptimeMs, u64 freshAgeMs, u64 signalAgeMs,
-                       u32 retryCount,
-                       u32 startFailureCount, const char *lastAttempt,
-                       Result lastStartResult, u32 no1StyleSet,
-                       u32 handheldStyleSet, u32 sampleAttributes,
-                       Result consoleInitResult,
+                       u32 retryCount, u32 startFailureCount,
+                       const char *lastAttempt, Result lastStartResult,
+                       u32 no1StyleSet, u32 handheldStyleSet,
+                       u32 sampleAttributes, Result consoleInitResult,
                        Result consoleStartResult) {
     if (!g_open || !source || !status || !lastAttempt) return;
     char text[768]{};
-    const int length = std::snprintf(text, sizeof(text),
-                                     "---\nuptime_ms=%llu\nsource=%s\nstatus=%s\n"
-                                     "sampling=%llu\nfresh_age_ms=%llu\n"
-                                     "signal_age_ms=%llu\n"
-                                     "accel_milli=%d,%d,%d\n"
-                                     "gyro_milli=%d,%d,%d\n"
-                                     "offset_centi=%d,%d\nretry_count=%u\n"
-                                     "start_failures=%u\nlast_attempt=%s\n"
-                                     "last_start_result=0x%08X\n"
-                                     "styles_no1=0x%08X\n"
-                                     "styles_handheld=0x%08X\n"
-                                     "sample_attributes=0x%08X\n"
-                                     "console_init_result=0x%08X\n"
-                                     "console_start_result=0x%08X\n",
-                                     static_cast<unsigned long long>(uptimeMs),
-                                     source, status,
-                                     static_cast<unsigned long long>(samplingNumber),
-                                     static_cast<unsigned long long>(freshAgeMs),
-                                     static_cast<unsigned long long>(signalAgeMs),
-                                     accelXMilli, accelYMilli, accelZMilli,
-                                     gyroXMilli, gyroYMilli, gyroZMilli,
-                                     offsetXCenti, offsetYCenti,
-                                     static_cast<unsigned>(retryCount),
-                                     static_cast<unsigned>(startFailureCount),
-                                     lastAttempt,
-                                     static_cast<unsigned>(lastStartResult),
-                                     static_cast<unsigned>(no1StyleSet),
-                                     static_cast<unsigned>(handheldStyleSet),
-                                     static_cast<unsigned>(sampleAttributes),
-                                     static_cast<unsigned>(consoleInitResult),
-                                     static_cast<unsigned>(consoleStartResult));
+    const int length = std::snprintf(
+        text, sizeof(text),
+        "---\nuptime_ms=%llu\nsource=%s\nstatus=%s\nsampling=%llu\n"
+        "fresh_age_ms=%llu\nsignal_age_ms=%llu\n"
+        "accel_milli=%d,%d,%d\ngyro_milli=%d,%d,%d\n"
+        "offset_centi=%d,%d\nretry_count=%u\nstart_failures=%u\n"
+        "last_attempt=%s\nlast_start_result=0x%08X\n"
+        "styles_no1=0x%08X\nstyles_handheld=0x%08X\n"
+        "sample_attributes=0x%08X\nconsole_init_result=0x%08X\n"
+        "console_start_result=0x%08X\n",
+        static_cast<unsigned long long>(uptimeMs), source, status,
+        static_cast<unsigned long long>(samplingNumber),
+        static_cast<unsigned long long>(freshAgeMs),
+        static_cast<unsigned long long>(signalAgeMs), accelXMilli,
+        accelYMilli, accelZMilli, gyroXMilli, gyroYMilli, gyroZMilli,
+        offsetXCenti, offsetYCenti, static_cast<unsigned>(retryCount),
+        static_cast<unsigned>(startFailureCount), lastAttempt,
+        static_cast<unsigned>(lastStartResult),
+        static_cast<unsigned>(no1StyleSet),
+        static_cast<unsigned>(handheldStyleSet),
+        static_cast<unsigned>(sampleAttributes),
+        static_cast<unsigned>(consoleInitResult),
+        static_cast<unsigned>(consoleStartResult));
     if (length <= 0) return;
 
     fsFsCreateDirectory(&g_sd, "/config");
     fsFsCreateDirectory(&g_sd, SWOTS_CONFIG_DIR);
-
     FsFile file{};
     Result rc = fsFsOpenFile(&g_sd, SWOTS_SENSOR_LOG_FILE,
                              FsOpenMode_Write, &file);
@@ -262,9 +99,9 @@ void writeSensorStatus(const char *source, const char *status, u64 samplingNumbe
         rc = fsFsCreateFile(&g_sd, SWOTS_SENSOR_LOG_FILE, 0, 0);
         if (R_FAILED(rc) ||
             R_FAILED(fsFsOpenFile(&g_sd, SWOTS_SENSOR_LOG_FILE,
-                                  FsOpenMode_Write, &file))) return;
+                                  FsOpenMode_Write, &file)))
+            return;
     }
-
     s64 offset = 0;
     if (R_FAILED(fsFileGetSize(&file, &offset)) || offset < 0) {
         fsFileClose(&file);
@@ -280,67 +117,11 @@ void writeSensorStatus(const char *source, const char *status, u64 samplingNumbe
         offset = 0;
     }
     rc = fsFileSetSize(&file, offset + recordSize);
-    if (R_SUCCEEDED(rc)) {
-        rc = fsFileWrite(&file, offset, text, recordSize, FsWriteOption_Flush);
-    }
+    if (R_SUCCEEDED(rc))
+        rc = fsFileWrite(&file, offset, text, recordSize,
+                         FsWriteOption_Flush);
     fsFileClose(&file);
     if (R_SUCCEEDED(rc)) fsFsCommit(&g_sd);
-}
-
-u64 readTeslaCombo() {
-    constexpr const char *path = "/config/tesla/config.ini";
-    constexpr u64 fallback = HidNpadButton_L | HidNpadButton_Down |
-                             HidNpadButton_StickR;
-    if (!g_open) return fallback;
-
-    FsFile file{};
-    if (R_FAILED(fsFsOpenFile(&g_sd, path, FsOpenMode_Read, &file))) return fallback;
-
-    char data[256]{};
-    u64 bytesRead = 0;
-    fsFileRead(&file, 0, data, sizeof(data) - 1, FsReadOption_None, &bytesRead);
-    fsFileClose(&file);
-    data[std::min<u64>(bytesRead, sizeof(data) - 1)] = '\0';
-
-    const char *value = std::strstr(data, "key_combo=");
-    if (!value) return fallback;
-    value += std::strlen("key_combo=");
-
-    u64 combo = 0;
-    char token[16]{};
-    u32 tokenLength = 0;
-    auto addToken = [&]() {
-        token[tokenLength] = '\0';
-        struct Mapping { const char *name; u64 button; };
-        static constexpr Mapping mappings[] = {
-            {"A", HidNpadButton_A}, {"B", HidNpadButton_B},
-            {"X", HidNpadButton_X}, {"Y", HidNpadButton_Y},
-            {"L", HidNpadButton_L}, {"R", HidNpadButton_R},
-            {"ZL", HidNpadButton_ZL}, {"ZR", HidNpadButton_ZR},
-            {"PLUS", HidNpadButton_Plus}, {"MINUS", HidNpadButton_Minus},
-            {"DUP", HidNpadButton_Up}, {"DDOWN", HidNpadButton_Down},
-            {"DLEFT", HidNpadButton_Left}, {"DRIGHT", HidNpadButton_Right},
-            {"LSTICK", HidNpadButton_StickL}, {"RSTICK", HidNpadButton_StickR},
-        };
-        for (const auto &mapping : mappings) {
-            if (std::strcmp(token, mapping.name) == 0) {
-                combo |= mapping.button;
-                break;
-            }
-        }
-        tokenLength = 0;
-    };
-
-    while (*value && *value != '\r' && *value != '\n') {
-        if (*value == '+') {
-            addToken();
-        } else if (tokenLength + 1 < sizeof(token)) {
-            token[tokenLength++] = *value;
-        }
-        ++value;
-    }
-    addToken();
-    return combo ? combo : fallback;
 }
 
 } // namespace control

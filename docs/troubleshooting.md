@@ -2,7 +2,7 @@
 
 Set SWOTS to Off before replacing SD card files. Restart first if Tesla or controller input is broken.
 
-## `Start failed: 0x0000FC01`
+## `Couldn't start` and log result `0x0000FC01`
 
 An old system probably rejected the NPDM capabilities.
 
@@ -52,7 +52,8 @@ Report the last `stage` and full Result value.
 - Use `Stop and return to Tesla` to stop cues before returning.
 - The Tesla shortcut also opens and closes the overlay.
 - Restart if input is already broken.
-- If removing `/config/swots/enabled.flag` fixes it, include `renderer.log` in the report.
+- If Off cannot stop the cues, restart before replacing the overlay or
+  renderer, then confirm both files came from the same release.
 
 After B closes SWOTS, the dots should return without blocking normal input.
 
@@ -60,7 +61,8 @@ After B closes SWOTS, the dots should return without blocking normal input.
 
 - Change a value with Left or Right. Press A to save and return.
 - Check that `/config/swots/settings.cfg` is writable.
-- Settings reload about every 500 ms.
+- When cues are On, a successful save is sent to the renderer before the
+  settings page closes. It takes effect after Tesla closes.
 - To reset, back up and delete `settings.cfg`, `settings.tmp`, and `settings.bak`.
 
 ## MTP Paths on Linux

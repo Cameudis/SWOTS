@@ -85,7 +85,8 @@ $(OUTPUT).ovl: $(OUTPUT).elf $(OUTPUT).nacp
 	@echo "built ... $(notdir $(OUTPUT).ovl)"
 
 $(OUTPUT).elf: $(OFILES)
-$(OFILES_SRC): $(HFILES_BIN)
+$(OUTPUT).nacp: $(TOPDIR)/../VERSION
+$(OFILES_SRC): $(HFILES_BIN) $(TOPDIR)/../VERSION
 
 -include $(DEPENDS)
 

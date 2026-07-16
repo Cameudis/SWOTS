@@ -28,6 +28,14 @@ def main() -> None:
     npdm = json.loads((ROOT / "swots.json").read_text(encoding="utf-8"))
     if npdm.get("name") != EXPECTED_NAME:
         raise SystemExit("metadata verification failed: NPDM project name differs")
+    if npdm.get("service_host") != ["swots:u"]:
+        raise SystemExit(
+            "metadata verification failed: renderer must host only swots:u"
+        )
+    if "*" not in npdm.get("service_access", []):
+        raise SystemExit(
+            "metadata verification failed: expected legacy wildcard service access"
+        )
     title_id = npdm.get("title_id", "").removeprefix("0x").upper()
     if not re.fullmatch(r"[0-9A-F]{16}", title_id):
         raise SystemExit("metadata verification failed: invalid NPDM title ID")

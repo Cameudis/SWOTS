@@ -31,7 +31,7 @@ APP_TITLE    := SWOTS
 DIST_DIR     := dist
 HOST_CXX     ?= g++
 HOST_BUILD   := build-host
-HOST_TESTS   := $(HOST_BUILD)/tesla_coexistence_test \
+HOST_TESTS   := $(HOST_BUILD)/ipc_protocol_test \
                 $(HOST_BUILD)/settings_format_test \
                 $(HOST_BUILD)/pixel_math_test \
                 $(HOST_BUILD)/motion_math_test \
@@ -152,10 +152,9 @@ test: $(HOST_TESTS)
 	@$(foreach test,$(HOST_TESTS),$(test) &&) true
 	@python3 scripts/verify_metadata.py
 
-$(HOST_BUILD)/tesla_coexistence_test: tests/tesla_coexistence_test.cpp \
-                                      include/tesla_coexistence.hpp \
-                                      include/tesla_exit_intent.hpp \
-                                      include/tesla_lifecycle.hpp
+$(HOST_BUILD)/ipc_protocol_test: tests/ipc_protocol_test.cpp \
+                                      include/ipc_protocol.hpp \
+                                      include/ipc_state.hpp
 	@mkdir -p $(HOST_BUILD)
 	@$(HOST_CXX) -std=c++20 -O2 -Wall -Wextra -Werror -pedantic \
 		-I$(CURDIR)/include $< -o $@
@@ -257,7 +256,7 @@ endif
 
 $(OUTPUT).elf : $(OFILES)
 
-$(OFILES_SRC) : $(HFILES_BIN)
+$(OFILES_SRC) : $(HFILES_BIN) $(TOPDIR)/VERSION
 
 #---------------------------------------------------------------------------------
 -include $(DEPENDS)

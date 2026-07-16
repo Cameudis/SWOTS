@@ -34,6 +34,8 @@ int main() {
     const Values defaults{};
     Values parsed{};
 
+    CHECK(swots::settings::detail::crc32("123456789", 9) == 0xcbf43926U);
+
     CHECK(swots::settings::opacityToPercent(0) == 0);
     CHECK(swots::settings::opacityToPercent(255) == 100);
     CHECK(swots::settings::percentToOpacity(0) == 0);
@@ -113,6 +115,92 @@ int main() {
     invalid = defaults;
     invalid.sensitivity = 101;
     CHECK(swots::settings::serialize(invalid, text, sizeof(text)) == 0);
+
+    swots::settings::Document document{};
+    document.values = base;
+    document.revision = 42;
+    const std::size_t v2Length =
+        swots::settings::serializeV2(document, text, sizeof(text));
+    CHECK(v2Length != 0);
+    const std::string canonical(text, v2Length);
+    CHECK(canonical.rfind("version=2\nrevision=42\nopacity=17\n", 0) == 0);
+    CHECK(canonical ==
+          "version=2\nrevision=42\nopacity=17\ndot_radius=8\n"
+          "sensitivity=33\nsmoothing=44\nchecksum=e32e879d\n");
+    swots::settings::Document reparsed{};
+    CHECK(swots::settings::parseDocument(text, v2Length, defaults, &reparsed));
+    CHECK(reparsed.version == 2 && reparsed.revision == 42);
+    CHECK(same(reparsed.values, base));
+
+    std::string damaged = canonical;
+    damaged[damaged.find("opacity=17") + 8] = '8';
+    CHECK(!swots::settings::parseDocument(damaged.data(), damaged.size(),
+                                          defaults, &reparsed));
+    std::string leadingZero = canonical;
+    leadingZero.replace(leadingZero.find("revision=42"), 11, "revision=042");
+    CHECK(!swots::settings::parseDocument(leadingZero.data(), leadingZero.size(),
+                                          defaults, &reparsed));
+    std::string crlf = canonical;
+    crlf.insert(crlf.find('\n'), 1, '\r');
+    CHECK(!swots::settings::parseDocument(crlf.data(), crlf.size(), defaults,
+                                          &reparsed));
+
+    CHECK(swots::settings::parseDocument("version=1\nopacity=9\n", 20,
+                                         defaults, &reparsed));
+    CHECK(reparsed.version == 1 && reparsed.revision == 0 &&
+          reparsed.values.opacity == 9);
+
+    swots::settings::Candidate candidates[3]{};
+    candidates[0] = {true, true,
+                     swots::settings::CandidateSource::Primary, document};
+    document.revision = 43;
+    candidates[1] = {true, false,
+                     swots::settings::CandidateSource::Temporary, document};
+    document.revision = 42;
+    candidates[2] = {true, true,
+                     swots::settings::CandidateSource::Backup, document};
+    CHECK(swots::settings::selectCandidate(candidates, 3, false) ==
+          &candidates[1]);
+    CHECK(swots::settings::selectCandidate(candidates, 3, true) ==
+          &candidates[0]);
+
+    // Model every persistence mutation boundary. A readable submitted temp is
+    // ineligible until its flush and first filesystem commit both succeeded.
+    enum SaveStage {
+        AfterCreate,
+        AfterWrite,
+        AfterFlush,
+        AfterFirstCommit,
+        AfterBackupDelete,
+        AfterBackupCommit,
+        AfterPrimaryRename,
+        AfterRenameCommit,
+        AfterTempRename,
+        AfterFinalCommit,
+    };
+    for (int stage = AfterCreate; stage <= AfterFinalCommit; ++stage) {
+        swots::settings::Candidate fault[3]{};
+        swots::settings::Document old = document;
+        old.revision = 42;
+        swots::settings::Document submitted = document;
+        submitted.revision = 43;
+        const bool newReadable = stage >= AfterWrite;
+        const bool newDurable = stage >= AfterFirstCommit;
+        const bool finalRename = stage >= AfterTempRename;
+        fault[0] = {true, true,
+                    finalRename ? swots::settings::CandidateSource::Backup
+                                : swots::settings::CandidateSource::Primary,
+                    old};
+        fault[1] = {newReadable, newDurable,
+                    finalRename ? swots::settings::CandidateSource::Primary
+                                : swots::settings::CandidateSource::Temporary,
+                    submitted};
+        const auto *recovered =
+            swots::settings::selectCandidate(fault, 2, true);
+        CHECK(recovered != nullptr);
+        CHECK(recovered->document.revision ==
+              (newDurable ? submitted.revision : old.revision));
+    }
 
     std::cout << "settings format tests passed\n";
     return 0;

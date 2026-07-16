@@ -196,8 +196,6 @@ void frame(u32 *pixels, u32 stride, u32 width, u32 height,
     for (u32 y = 0; y < height; ++y) {
         std::memset(reinterpret_cast<u8 *>(pixels) + y * stride, 0, width * sizeof(u32));
     }
-    if (!config.enabled) return;
-
     const float centerX = static_cast<float>(width) * 0.5f;
     const float centerY = static_cast<float>(height) * 0.5f;
     const float halfDiagonal = std::sqrt(centerX * centerX + centerY * centerY);
