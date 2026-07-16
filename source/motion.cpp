@@ -188,15 +188,20 @@ bool Motion::probeHighQualityController(u64 now, MotionSample *sample) {
 }
 
 void Motion::resetInputCalibration() {
-    m_state.velocityX = 0.0f;
-    m_state.velocityY = 0.0f;
     m_state.gravityX = 0.0f;
     m_state.gravityY = 0.0f;
+    m_state.gravityZ = 0.0f;
+    m_state.lastAccelX = 0.0f;
+    m_state.lastAccelY = 0.0f;
+    m_state.lastAccelZ = 0.0f;
     m_state.gyroBiasX = 0.0f;
+    m_state.gyroBiasY = 0.0f;
     m_state.gyroBiasZ = 0.0f;
     m_state.filteredAccelX = 0.0f;
     m_state.filteredAccelY = 0.0f;
+    m_state.sensorStableSeconds = 0.0f;
     m_state.stillSeconds = 0.0f;
+    m_state.accelHistoryReady = false;
     m_state.gravityReady = false;
 }
 
@@ -400,8 +405,9 @@ MotionSample Motion::sample() {
 }
 
 void Motion::update(const MotionSample &sample, const Config &config, float dt) {
-    swots::motion_math::Input input{sample.accelX, sample.accelY,
-                                     sample.gyroX, sample.gyroZ, sample.valid};
+    swots::motion_math::Input input{
+        sample.accelX, sample.accelY, sample.accelZ,
+        sample.gyroX, sample.gyroY, sample.gyroZ, sample.valid};
     swots::motion_math::Parameters parameters{config.sensitivity,
                                                config.smoothing};
     swots::motion_math::update(m_state, input, parameters, dt);

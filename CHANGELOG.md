@@ -4,6 +4,19 @@
 
 - No changes.
 
+## 0.1.0-alpha.4 — 2026-07-16
+
+- Fixed horizontal cues ignoring in-place turns while the Switch screen is
+  held upright by projecting three-axis gyroscope data onto world-up.
+- Removed translation inertia and forced recentering so dots stop at their
+  current phase as soon as the motion signal settles.
+- Fixed a changed console tilt being mistaken for sustained acceleration,
+  which could make dots scroll continuously while the console was stationary.
+- Added strict stationary gating and a gyroscope deadband so accelerometer and
+  gyro residuals cannot move dots while the console is held still.
+- Hardware-tested upright and flat turns, immediate stopping, and stationary
+  tilted poses with the handheld sensor source.
+
 ## 0.1.0-alpha.3 — 2026-07-16
 
 - Replaced SD-card control-file polling with a private, versioned IPC service

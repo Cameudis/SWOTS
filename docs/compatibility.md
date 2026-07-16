@@ -22,9 +22,13 @@ Atmosphère 1.7.1 was identified from the official `package3` hash. The installe
    frame uses them and that they remain after a restart.
 8. Change settings and leave with B, Home, Power, the Tesla shortcut, and touch
    dismissal. Confirm the draft is neither saved nor applied.
-9. Move the active controller. Confirm smooth motion without idle drift.
-10. Confirm screenshots exclude the dots. If possible, confirm capture-card output includes them.
-11. Confirm Home, Power, sleep/wake, and repeated hide/reopen cycles preserve
+9. Move the active controller. Confirm smooth motion without idle drift. When
+   motion ends, confirm the dots stop without coasting or snapping back.
+10. Hold the Switch normally with its screen upright, turn left and right in
+    place, and confirm the dots move horizontally in the expected direction.
+    Repeat with the console flat and confirm the same behavior.
+11. Confirm screenshots exclude the dots. If possible, confirm capture-card output includes them.
+12. Confirm Home, Power, sleep/wake, and repeated hide/reopen cycles preserve
     cue ownership without leaving a renderer process after Off.
 
 Use the report template in [CONTRIBUTING.md](../CONTRIBUTING.md). Add a matrix row only after testing every item.

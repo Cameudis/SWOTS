@@ -38,6 +38,16 @@ Public KineStop behavior was used only to compare motion direction and sensitivi
 - A 1280x720 double buffer used too much memory. SWOTS draws at 640x360 and lets VI scale it.
 - Motion cues need acceleration and rotation. A gyroscope line alone is not enough.
 - Gyroscope bias is learned only while the device is still. This avoids hiding small hand movements.
+- Horizontal turn cues project all three gyroscope axes onto world-up as
+  estimated from the low-pass gravity vector. This preserves Z-axis yaw while
+  the console is flat and follows Y-axis yaw when its screen is held upright.
+- Translation uses acceleration as the direct dot-field scroll rate, with no
+  accumulated velocity and no position return. Cues stop at their current
+  phase instead of coasting or visibly recentering.
+- When acceleration and angular velocity remain stable for 120 ms, the current
+  pose is accepted as stationary gravity and residual translation is cleared.
+- A 0.01 rad/s gyroscope deadband rejects the 0.003-0.006 rad/s stationary
+  residuals observed in retail sensor logs without hiding deliberate turns.
 - In handheld use, the console's built-in IMU is rigidly coupled to the screen.
   `SevenSixAxisSensor` therefore provides motion without depending on the game
   to start controller six-axis input or on a third-party rail controller's
